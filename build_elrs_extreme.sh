@@ -8,8 +8,9 @@ set -e
 echo "🚀 Building EXTREME-BLE ExpressLRS firmware..."
 
 # Configuration
-ELRS_PATH="/tmp/ExpressLRS/src"
-HARDWARE_PATH="/tmp/hardware"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ELRS_PATH="$SCRIPT_DIR/ExpressLRS/src"
+HARDWARE_PATH="$SCRIPT_DIR/hardware"
 TARGET_ENV="Unified_ESP32_2400_TX_via_UART"
 DEVICE_NAME="RadioMaster_TX_Ranger_Nano_2400"
 OUTPUT_DIR="/var/www/html/elrs"
