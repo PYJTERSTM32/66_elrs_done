@@ -15,6 +15,8 @@ void EXT_BLE_Task(void);
 // New ping-pong test functions
 void EXT_BLE_SendPingPongMessage(const char* message);
 void EXT_BLE_TestCommunication(void);
+// RC channel reception
+uint16_t* EXT_BLE_GetRCChannels(void);
 
 #ifdef __cplusplus
 }

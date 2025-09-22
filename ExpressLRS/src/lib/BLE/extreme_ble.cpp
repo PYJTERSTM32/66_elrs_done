@@ -36,6 +36,34 @@ static uint16_t failsafe_channels[16] = {
     1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500
 };
 
+// Current RC values received from mobile app
+static uint16_t received_channels[16] = {
+    1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500,
+    1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500
+};
+
+class RCCallbacks: public NimBLECharacteristicCallbacks {
+    void onWrite(NimBLECharacteristic* pCharacteristic) {
+        std::string value = pCharacteristic->getValue();
+
+        if (value.length() == 32) { // 16 channels × 2 bytes = 32 bytes
+            Serial.printf("[RC] Received 16-channel data (%d bytes)\n", value.length());
+
+            // Parse RC data from mobile app
+            for (int i = 0; i < 16; i++) {
+                uint16_t channel_value = ((uint8_t)value[i*2]) | (((uint8_t)value[i*2+1]) << 8);
+                received_channels[i] = channel_value;
+            }
+
+            Serial.printf("[RC] CH1=%d CH2=%d CH3=%d CH4=%d\n",
+                received_channels[0], received_channels[1],
+                received_channels[2], received_channels[3]);
+        } else {
+            Serial.printf("[RC] Invalid data length: %d bytes\n", value.length());
+        }
+    }
+};
+
 class PingPongCallbacks: public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* pCharacteristic) {
         String value = pCharacteristic->getValue().c_str();
@@ -106,8 +134,9 @@ void EXT_BLE_Init(void) {
         // RC Data characteristic (16 channels * 2 bytes = 32 bytes)
         pRCCharacteristic = pService->createCharacteristic(
             EXT_BLE_RC_CHAR_UUID,
-            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
+            NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY
         );
+        pRCCharacteristic->setCallbacks(new RCCallbacks());
         
         // Telemetry characteristic (voltage, current, rssi, lq)
         pTelemetryCharacteristic = pService->createCharacteristic(
@@ -213,10 +242,14 @@ void EXT_BLE_SendPingPongMessage(const char* message) {
 void EXT_BLE_TestCommunication(void) {
     static uint32_t lastTest = 0;
     uint32_t now = millis();
-    
+
     // Send test message every 10 seconds if connected
     if (deviceConnected && (now - lastTest > 10000)) {
         EXT_BLE_SendPingPongMessage("HEARTBEAT");
         lastTest = now;
     }
+}
+
+uint16_t* EXT_BLE_GetRCChannels(void) {
+    return received_channels;
 }
