@@ -1,4 +1,5 @@
 #include "rxtx_common.h"
+#include <math.h>
 
 #include "CRSFHandset.h"
 #include "dynpower.h"
@@ -197,11 +198,30 @@ void ICACHE_RAM_ATTR LinkStatsFromOta(OTA_LinkStats_s * const ls)
   static uint32_t last_ble_tlm_update = 0;
   uint32_t now_tlm = millis();
   if (now_tlm - last_ble_tlm_update > 1000) { // 1Hz = 1000ms
-    EXT_BLE_PublishTelemetry(
-      0.0f,  // voltage (placeholder - not available in linkstats)
-      0.0f,  // current (placeholder - not available in linkstats)  
+    // Simulate telemetry based on RF link quality and time
+    float sim_voltage = 11.0f + (CRSF::LinkStatistics.uplink_Link_quality * 0.05f); // 11.0-16.0V based on LQ
+    float sim_current = 2.0f + (sin(now_tlm / 10000.0f) * 1.0f); // 1.0-3.0A oscillating
+    float sim_speed = 15.0f + (CRSF::LinkStatistics.uplink_Link_quality * 0.3f); // 15-45 km/h based on LQ
+    float sim_heading = fmod(now_tlm / 100.0f, 360.0f); // Rotating heading 0-360°
+    uint8_t sim_satellites = 8 + (CRSF::LinkStatistics.uplink_Link_quality / 20); // 8-13 satellites
+
+    // Use placeholder values for attitude data (lowisko, punkt, klapyOpenAuto)
+    // These will be replaced when we add real CRSF telemetry parsing
+    float sim_lowisko = sin(now_tlm / 5000.0f) * 10.0f; // ±10 degrees
+    float sim_punkt = cos(now_tlm / 7000.0f) * 5.0f; // ±5 degrees
+    float sim_klapyOpenAuto = (now_tlm % 30000 < 15000) ? 1.0f : 0.0f; // Toggle every 15s
+
+    EXT_BLE_PublishFullTelemetry(
+      sim_voltage,
+      sim_current,
       CRSF::LinkStatistics.uplink_RSSI_1,
-      CRSF::LinkStatistics.uplink_Link_quality
+      CRSF::LinkStatistics.uplink_Link_quality,
+      sim_speed,
+      sim_heading,
+      sim_lowisko,
+      sim_punkt,
+      sim_klapyOpenAuto,
+      sim_satellites
     );
     last_ble_tlm_update = now_tlm;
   }
@@ -1083,7 +1103,7 @@ static void EnterBindingMode()
   DBGLN("Entered binding mode at freq = %d", Radio.currFreq);
 }
 
-static void ExitBindingMode()
+void ExitBindingMode()
 {
   if (!InBindingMode)
     return;

@@ -19,13 +19,13 @@
 // Legacy UUIDs for RC and Telemetry
 #define EXT_BLE_RC_CHAR_UUID        "12345678-1234-5678-9abc-123456789abd"
 #define EXT_BLE_TELEMETRY_CHAR_UUID "12345678-1234-5678-9abc-123456789abe"
+#define EXT_BLE_BINDING_CHAR_UUID   "12345678-1234-5678-9abc-123456789abf"
 
 static NimBLEServer* pServer = nullptr;
 static NimBLEService* pService = nullptr;
 static NimBLECharacteristic* pRCCharacteristic = nullptr;
 static NimBLECharacteristic* pTelemetryCharacteristic = nullptr;
-// New characteristics for ping-pong test
-static NimBLECharacteristic* pPingPongCharacteristic = nullptr;
+static NimBLECharacteristic* pBindingCharacteristic = nullptr;
 static NimBLECharacteristic* pDeviceInfoCharacteristic = nullptr;
 static bool deviceConnected = false;
 static SemaphoreHandle_t bleMutex = nullptr;
@@ -64,26 +64,31 @@ class RCCallbacks: public NimBLECharacteristicCallbacks {
     }
 };
 
-class PingPongCallbacks: public NimBLECharacteristicCallbacks {
+class BindingCallbacks: public NimBLECharacteristicCallbacks {
     void onWrite(NimBLECharacteristic* pCharacteristic) {
-        String value = pCharacteristic->getValue().c_str();
-        Serial.printf("[PING-PONG] Received: %s\n", value.c_str());
-        
-        // Ping-pong response logic
+        std::string value = pCharacteristic->getValue();
+        Serial.printf("[BINDING] Received command: %s\n", value.c_str());
+
         String response;
-        if (value == "PING") {
-            response = "PONG";
-        } else if (value == "TEST") {
-            response = "OK";
+        if (value == "START_BINDING") {
+            Serial.println("[BINDING] Starting binding mode...");
+            // Wywołaj funkcję bindingu z tx_main.cpp
+            extern void EnterBindingModeSafely();
+            EnterBindingModeSafely();
+            response = "BINDING_STARTED";
+        } else if (value == "STOP_BINDING") {
+            Serial.println("[BINDING] Stopping binding mode...");
+            extern void ExitBindingMode();
+            ExitBindingMode();
+            response = "BINDING_STOPPED";
         } else if (value == "STATUS") {
-            response = "READY";
-        } else if (value.startsWith("ECHO:")) {
-            response = "ECHO_REPLY:" + value.substring(5);
+            extern bool InBindingMode;
+            response = InBindingMode ? "BINDING_ACTIVE" : "BINDING_INACTIVE";
         } else {
-            response = "UNKNOWN_CMD";
+            response = "UNKNOWN_COMMAND";
         }
-        
-        Serial.printf("[PING-PONG] Sending response: %s\n", response.c_str());
+
+        Serial.printf("[BINDING] Sending response: %s\n", response.c_str());
         pCharacteristic->setValue(response.c_str());
         pCharacteristic->notify();
     }
@@ -143,14 +148,14 @@ void EXT_BLE_Init(void) {
             EXT_BLE_TELEMETRY_CHAR_UUID,
             NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::NOTIFY
         );
-        
-        // Ping-Pong test characteristic for Flutter app communication
-        pPingPongCharacteristic = pService->createCharacteristic(
-            CHARACTERISTIC_UUID,
+
+        // Binding characteristic (START_BINDING, STOP_BINDING, STATUS)
+        pBindingCharacteristic = pService->createCharacteristic(
+            EXT_BLE_BINDING_CHAR_UUID,
             NIMBLE_PROPERTY::READ | NIMBLE_PROPERTY::WRITE | NIMBLE_PROPERTY::NOTIFY
         );
-        pPingPongCharacteristic->setCallbacks(new PingPongCallbacks());
-        
+        pBindingCharacteristic->setCallbacks(new BindingCallbacks());
+
         // Device info characteristic
         pDeviceInfoCharacteristic = pService->createCharacteristic(
             DEVICE_INFO_UUID,
@@ -194,8 +199,13 @@ void EXT_BLE_PublishRC(uint16_t channels[16]) {
 }
 
 void EXT_BLE_PublishTelemetry(float voltage, float current, int8_t rssi, uint8_t lq) {
+    EXT_BLE_PublishFullTelemetry(voltage, current, rssi, lq, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0);
+}
+
+void EXT_BLE_PublishFullTelemetry(float voltage, float current, int8_t rssi, uint8_t lq,
+                                  float speed, float heading, float lowisko, float punkt, float klapyOpenAuto, uint8_t satellites) {
     if (!pTelemetryCharacteristic || !bleMutex) return;
-    
+
     if (xSemaphoreTake(bleMutex, 10 / portTICK_PERIOD_MS) == pdTRUE) {
         try {
             struct {
@@ -203,8 +213,14 @@ void EXT_BLE_PublishTelemetry(float voltage, float current, int8_t rssi, uint8_t
                 float current;
                 int8_t rssi;
                 uint8_t lq;
-            } tlm_data = {voltage, current, rssi, lq};
-            
+                float speed;      // km/h from GPS
+                float heading;    // degrees from GPS
+                float lowisko;    // pitch from attitude (preserved mapping)
+                float punkt;      // roll from attitude (preserved mapping)
+                float klapyOpenAuto; // yaw from attitude (preserved mapping)
+                uint8_t satellites;  // satellite count
+            } tlm_data = {voltage, current, rssi, lq, speed, heading, lowisko, punkt, klapyOpenAuto, satellites};
+
             pTelemetryCharacteristic->setValue((uint8_t*)&tlm_data, sizeof(tlm_data));
             if (deviceConnected) {
                 pTelemetryCharacteristic->notify();
@@ -224,32 +240,42 @@ void EXT_BLE_Task(void) {
     // Periodic housekeeping if needed
 }
 
-void EXT_BLE_SendPingPongMessage(const char* message) {
-    if (!pPingPongCharacteristic || !deviceConnected) return;
-    
+
+uint16_t* EXT_BLE_GetRCChannels(void) {
+    return received_channels;
+}
+
+void EXT_BLE_StartBinding(void) {
+    if (!pBindingCharacteristic || !deviceConnected) return;
+
     if (xSemaphoreTake(bleMutex, 10 / portTICK_PERIOD_MS) == pdTRUE) {
         try {
-            pPingPongCharacteristic->setValue(message);
-            pPingPongCharacteristic->notify();
-            Serial.printf("[PING-PONG] Sent: %s\n", message);
+            pBindingCharacteristic->setValue("BINDING_STARTED");
+            pBindingCharacteristic->notify();
+            Serial.println("[EXTREME-BLE] Binding started via API");
         } catch (...) {
-            Serial.println("[PING-PONG] Failed to send message");
+            Serial.println("[EXTREME-BLE] Failed to notify binding start");
         }
         xSemaphoreGive(bleMutex);
     }
 }
 
-void EXT_BLE_TestCommunication(void) {
-    static uint32_t lastTest = 0;
-    uint32_t now = millis();
+void EXT_BLE_StopBinding(void) {
+    if (!pBindingCharacteristic || !deviceConnected) return;
 
-    // Send test message every 10 seconds if connected
-    if (deviceConnected && (now - lastTest > 10000)) {
-        EXT_BLE_SendPingPongMessage("HEARTBEAT");
-        lastTest = now;
+    if (xSemaphoreTake(bleMutex, 10 / portTICK_PERIOD_MS) == pdTRUE) {
+        try {
+            pBindingCharacteristic->setValue("BINDING_STOPPED");
+            pBindingCharacteristic->notify();
+            Serial.println("[EXTREME-BLE] Binding stopped via API");
+        } catch (...) {
+            Serial.println("[EXTREME-BLE] Failed to notify binding stop");
+        }
+        xSemaphoreGive(bleMutex);
     }
 }
 
-uint16_t* EXT_BLE_GetRCChannels(void) {
-    return received_channels;
+bool EXT_BLE_IsBinding(void) {
+    extern bool InBindingMode;
+    return InBindingMode;
 }

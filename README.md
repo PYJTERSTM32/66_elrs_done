@@ -6,9 +6,10 @@ Automatyczny system budowania firmware ExpressLRS z integracją EXTREME-BLE dla 
 
 ### EXTREME-BLE Features
 - **BLE RC Control**: 16-kanałowy CRSF przez Bluetooth @50Hz
-- **BLE Telemetria**: Wysyłanie danych telemetrycznych @1Hz  
+- **BLE Telemetria**: Pełna telemetria z autopilotem @1Hz
+- **BLE Parowanie**: Bezprzewodowe parowanie z odbiornikiem ExpressLRS
 - **WiFi Extended**: 90s timeout zamiast standardowych 60s
-- **Custom Names**: 
+- **Custom Names**:
   - WiFi: `Extreme-Update`
   - BLE: `Extreme-Pilot XXXXXX` (MAC suffix)
 
@@ -102,17 +103,49 @@ python3 python/binary_configurator.py \
 ## 📱 Aplikacja Mobilna
 
 ### Funkcjonalność
-- **Virtual Joystick**: CH1 (Roll), CH2 (Pitch) control
+- **Virtual Joystick**: CH1 (Roll), CH2 (Pitch) control o wielkości 50x50px
 - **BLE Connection**: Auto-scan for `Extreme-Pilot` devices
 - **Real-time RC**: 50Hz channel data transmission
-- **GPS Telemetry**: Position, speed, heading @1Hz
-- **Live Display**: RC values, connection status, telemetry
+- **Telemetria**: Voltage, current, RSSI, LQ, speed, heading, satellites
+- **Parowanie ExpressLRS**: Bezprzewodowe parowanie z odbiornikiem przez BLE
+- **Live Display**: RC values, connection status, telemetry, binding status
 
 ### Kompilacja APK
 ```bash
 cd /home/projekty/70_crsf_mobile
 flutter build apk --release
 ```
+
+## 🔗 Parowanie ExpressLRS przez BLE
+
+### Jak używać funkcji parowania:
+
+1. **Przygotuj odbiornik (RP1)**:
+   - Wykonaj 3x włącz/wyłącz zasilanie w ciągu 2 sekund
+   - Odbiornik przejdzie w tryb parowania (LED miga)
+
+2. **Uruchom parowanie z aplikacji**:
+   - Połącz się z `Extreme-Pilot XXXXXX` przez BLE
+   - Przejdź do panelu "Parowanie ExpressLRS"
+   - Kliknij przycisk **PARUJ**
+
+3. **Proces parowania**:
+   - Aplikacja wyśle komendę `START_BINDING` do Ranger Nano
+   - Nadajnik przejdzie w tryb parowania (binding mode)
+   - Parowanie automatycznie zakończy się po znalezieniu odbiornika
+   - Timeout: 30 sekund
+
+4. **Status parowania**:
+   - `GOTOWY` - można rozpocząć parowanie
+   - `ROZPOCZYNANIE...` - inicjalizacja
+   - `PAROWANIE...` - trwa parowanie
+   - `ZATRZYMANO` - anulowano ręcznie
+   - `TIMEOUT` - przekroczono czas
+
+### Protokół BLE Binding:
+- **UUID**: `12345678-1234-5678-9abc-123456789abf`
+- **Komendy**: `START_BINDING`, `STOP_BINDING`, `STATUS`
+- **Odpowiedzi**: `BINDING_STARTED`, `BINDING_STOPPED`, `BINDING_ACTIVE`, `BINDING_INACTIVE`
 
 ## 🌐 Web Access
 
@@ -199,6 +232,14 @@ strings firmware.bin | grep wifi-on-interval
 - Local ExpressLRS and hardware sources
 - Updated paths and portability
 - Complete troubleshooting documentation
+
+### v1.2 - Parowanie BLE (Sep 2024)
+- Dodana funkcjonalność parowania ExpressLRS przez BLE
+- Nowa charakterystyka binding w EXTREME-BLE firmware
+- Panel parowania w aplikacji mobilnej z instrukcjami
+- Większy joystick (50x50px) dla lepszej kontroli
+- Usunięto niepotrzebny kod ping-pong
+- Pełna telemetria z autopilotem (34-bajty)
 
 ---
 
