@@ -116,8 +116,8 @@ flutter build apk --release
 
 ## 🌐 Web Access
 
-- **Firmware**: http://SERVER_IP/elrs/
-- **Mobile App**: http://SERVER_IP/publish/extreme-ble-crsf-mobile.apk
+- **Firmware**: https://SERVER_IP/elrs/
+- **Mobile App**: https://SERVER_IP/publish/extreme-ble-crsf-mobile.apk
 - **Build Status**: Console output podczas budowania
 
 ## ⚡ Performance
