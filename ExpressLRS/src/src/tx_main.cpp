@@ -624,6 +624,17 @@ void ICACHE_RAM_ATTR SendRCdataToRF()
       NextPacketIsMspData = true;
 
       injectBackpackPanTiltRollData(now);
+
+      // EXTREME-BLE integration - replace ChannelData with BLE RC data if connected
+      #if defined(Regulatory_Domain_EU_CE_2400)
+      if (EXT_BLE_IsConnected()) {
+        uint16_t* ble_channels = EXT_BLE_GetRCChannels();
+        for (int i = 0; i < CRSF_NUM_CHANNELS && i < 16; i++) {
+          ChannelData[i] = US_to_CRSF(ble_channels[i]);
+        }
+      }
+      #endif
+
       OtaPackChannelData(&otaPkt, ChannelData, TelemetryReceiver.GetCurrentConfirm(), ExpressLRS_currTlmDenom);
       
       // Publish RC data to EXTREME-BLE

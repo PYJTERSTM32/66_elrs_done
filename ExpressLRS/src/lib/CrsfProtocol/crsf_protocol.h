@@ -450,6 +450,11 @@ static inline uint16_t ICACHE_RAM_ATTR CRSF_to_US(uint16_t val)
 {
     return fmap(val, CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX, 988, 2012);
 }
+// Scale a 1000-2000μs RC value to -100& to +100% crossfire value
+static inline uint16_t ICACHE_RAM_ATTR US_to_CRSF(uint16_t val)
+{
+    return fmap(val, 1000, 2000, CRSF_CHANNEL_VALUE_MIN, CRSF_CHANNEL_VALUE_MAX);
+}
 
 // Scale down a 10-bit value to a -100& to +100% crossfire value
 static inline uint16_t ICACHE_RAM_ATTR UINT10_to_CRSF(uint16_t val)
