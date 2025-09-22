@@ -22,13 +22,19 @@ Automatyczny system budowania firmware ExpressLRS z integracją EXTREME-BLE dla 
 
 ### Automatyczne budowanie
 ```bash
-cd /home/projekty/50_elrs_build
+cd /home/projekty/66_elrs_done
 ./build_elrs_extreme.sh
 ```
 
-### Ręczne budowanie  
+**Skrypt automatycznie:**
+1. Kompiluje firmware z EXTREME-BLE modyfikacjami
+2. Wykonuje binary patching dla RadioMaster Ranger Nano
+3. Wdraża pliki na serwer WWW
+4. Generuje instrukcje flashowania
+
+### Ręczne budowanie
 ```bash
-cd /tmp/ExpressLRS/src
+cd ExpressLRS/src
 pio run -e Unified_ESP32_2400_TX_via_UART
 ```
 
@@ -58,10 +64,12 @@ esptool.py --port /dev/ttyUSB0 --baud 460800 write_flash 0x1000 /var/www/html/el
 ## 🔧 Konfiguracja
 
 ### Source Locations
-- **ExpressLRS**: `/tmp/ExpressLRS/src`
-- **Hardware**: `/tmp/hardware`
+- **ExpressLRS**: `./ExpressLRS/src` (local)
+- **Hardware**: `./hardware` (local)
 - **Target**: `Unified_ESP32_2400_TX_via_UART`
 - **Device**: `RadioMaster_TX_Ranger_Nano_2400`
+
+**⚠️ Projekt jest samodzielny - wszystkie zależności w lokalnych katalogach**
 
 ### Build Flags
 ```cpp
@@ -74,9 +82,22 @@ esptool.py --port /dev/ttyUSB0 --baud 460800 write_flash 0x1000 /var/www/html/el
 ```
 
 ### Custom Code Integration
-- **BLE Library**: `/tmp/ExpressLRS/src/lib/BLE/extreme_ble.{h,cpp}`
-- **TX Main**: Modified `/tmp/ExpressLRS/src/src/tx_main.cpp`
-- **Options**: Updated `/tmp/ExpressLRS/src/lib/OPTIONS/options.cpp`
+- **BLE Library**: `./ExpressLRS/src/lib/BLE/extreme_ble.{h,cpp}`
+- **TX Main**: Modified `./ExpressLRS/src/src/tx_main.cpp`
+- **Options**: Updated `./ExpressLRS/src/lib/OPTIONS/options.cpp`
+
+### Binary Configurator Settings
+**Kluczowe parametry (wymagane dla poprawnego działania):**
+```bash
+python3 python/binary_configurator.py \
+    firmware.bin \
+    --target "radiomaster.tx_2400.ranger-nano" \
+    --phrase "" \
+    --lbt \
+    --auto-wifi 90
+```
+
+**⚠️ UWAGA**: `--auto-wifi 90` jest WYMAGANE! Bez tego WiFi nie włączy się po 90s.
 
 ## 📱 Aplikacja Mobilna
 
@@ -123,8 +144,64 @@ flutter build apk --release
 - **LBT Compliance**: EU regulatory compliant
 - **Power Management**: Standard ELRS power levels
 
+## 🔧 Troubleshooting
+
+### ❌ WiFi nie włącza się po 90 sekundach
+**Problem**: Brak WiFi "Extreme-Update" po 90s bezczynności
+**Rozwiązanie**:
+```bash
+# Sprawdź czy firmware ma poprawną konfigurację
+strings /var/www/html/elrs/firmware.bin | grep "wifi-on-interval"
+# Powinno pokazać: {"wifi-on-interval": 90, ...}
+
+# Jeśli brak, przebuduj z --auto-wifi:
+./build_elrs_extreme.sh
+```
+
+### ❌ Błąd "Regulatory_Domain 2400 not compatible"
+**Problem**: `--domain fcc_915` dla 2400MHz
+**Rozwiązanie**: Użyj `--lbt` zamiast `--domain` dla SX1280 (2400MHz)
+
+### ❌ Błąd "Target not found: RadioMaster Ranger Nano"
+**Problem**: Nieprawidłowa nazwa targetu
+**Rozwiązanie**: Używaj **dokładnie**: `radiomaster.tx_2400.ranger-nano`
+
+### ❌ Binary configurator "file not found"
+**Problem**: Brak pliku `hardware/targets.json`
+**Rozwiązanie**:
+```bash
+# Uruchom z katalogu zawierającego hardware/
+cd /path/to/project
+python3 ExpressLRS/src/python/binary_configurator.py ...
+```
+
+### 🔍 Diagnostyka
+**Sprawdź skompilowane build flags:**
+```bash
+# Powinno zawierać -DAUTO_WIFI_ON_INTERVAL=90
+grep -A 5 "build flags:" build_log.txt
+```
+
+**Sprawdź JSON w firmware:**
+```bash
+strings firmware.bin | grep wifi-on-interval
+```
+
+## 📋 Wersjonowanie i Historia
+
+### v1.0 - Podstawowa implementacja (Sep 2024)
+- EXTREME-BLE integration
+- WiFi timeout 90s
+- LBT regulatory compliance
+
+### v1.1 - Standalone project (Sep 2024)
+- Self-contained with all dependencies
+- Local ExpressLRS and hardware sources
+- Updated paths and portability
+- Complete troubleshooting documentation
+
 ---
 
-**Created for**: Autonomous boat control systems  
-**Compatible with**: AlfredoCRSF + ExpressLRS 3.5.6+  
+**Created for**: Autonomous boat control systems
+**Compatible with**: AlfredoCRSF + ExpressLRS 3.5.6+
 **License**: Follows ExpressLRS GPL-3.0 license
